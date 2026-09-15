@@ -6,9 +6,18 @@ native build/recovery branch is skipped and every serve stays on the slow
 `python -m llama_cpp.server` path even after a real native binary appears.
 
 The runner now relinks ~/bin/llama-server to a real native binary when one
-exists. These tests extract the SHIPPED shell lines from the route source and
-execute them against a temporary HOME, so the test cannot drift from what the
-runner actually emits.
+exists. Assertions here are behavioral (symlink targets, exit codes, stdout):
+each test runs the shipped shell with bash against a temporary HOME.
+
+Why the shipped lines are extracted from the route source instead of being
+obtained by calling the generator (required note per tests/TESTING_STANDARD.md,
+behavioral-first policy): the runner lines are assembled by a nested builder
+inside `setup_cookbook_routes()` that needs a fully-formed `ServeRequest` plus
+request/session context, so invoking it from a unit test would test a
+re-construction of the inputs rather than the real emission point. Extracting
+the literals that the runner actually appends - and executing them for real -
+keeps the assertions behavioral while pinning exactly what ships, so the test
+cannot drift from production.
 """
 import ast
 import os
