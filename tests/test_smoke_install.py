@@ -74,3 +74,43 @@ def test_app_boots_and_health_is_healthy(monkeypatch):
     resp = client.get("/api/health")
     assert resp.status_code == 200, resp.text[:500]
     assert resp.json().get("status") == "healthy"
+
+
+def test_root_serves_login_shell_html(monkeypatch):
+    """Fresh install must serve the UI shell, not just a healthy API.
+
+    Smoke-contract item from #3968: "confirm the UI can become available
+    when applicable". Without users configured, the app's first-run path
+    redirects browser navigation to /login; assert that the shell HTML
+    actually comes back (status OK, HTML document, viewport meta) rather
+    than an error page or an empty body.
+    """
+    import os
+
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("CHROMADB_HOST", "127.0.0.1")
+    monkeypatch.setenv("CHROMADB_PORT", "9")
+    monkeypatch.setenv("SEARXNG_INSTANCE", "http://127.0.0.1:9")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:9/v1")
+    monkeypatch.setenv("EMBEDDING_URL", "")
+    os.environ.pop("EMBEDDING_MODEL", None)
+
+    from fastapi.testclient import TestClient
+    from app import app
+
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.get("/", follow_redirects=False)
+    # Either the login shell directly (200) or the first-run redirect to
+    # /login — both mean the UI layer is mounted and answering. What must
+    # NOT happen is a 5xx or an unexpected scheme.
+    assert resp.status_code in (200, 302, 307), (
+        f"unexpected status {resp.status_code}: {resp.text[:300]}"
+    )
+    if resp.status_code in (302, 307):
+        location = resp.headers.get("location", "")
+        assert "/login" in location, f"redirect did not target login: {location}"
+        resp = client.get(location or "/login")
+    body = resp.text
+    assert resp.status_code == 200, resp.text[:300]
+    assert "<html" in body.lower(), "login shell did not return HTML"
+    assert 'name="viewport"' in body, "login shell missing responsive viewport meta"
