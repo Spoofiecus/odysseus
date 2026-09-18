@@ -32,6 +32,11 @@ env:
 jobs:
   build:
     name: build (${{ matrix.arch }})
+    # Publish only from the canonical repository. A fork's owner name can
+    # contain uppercase characters, and GHCR rejects image references that are
+    # not fully lowercase (ghcr.io/<Owner>/<repo> -> invalid reference format),
+    # which surfaced as a failing docker-publish run on every fork push.
+    if: github.repository == 'odysseus-dev/odysseus'
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
