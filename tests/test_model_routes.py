@@ -1281,6 +1281,12 @@ def _patch_create_deps(monkeypatch, db, settings=None):
     monkeypatch.setattr(model_routes, "_save_settings", lambda s: settings.update(s))
     monkeypatch.setattr(endpoint_resolver, "resolve_url", lambda u: u)
     monkeypatch.setattr(auth_helpers, "get_current_user", lambda req: None)
+    # The create route's SSRF guard resolves the base_url hostname before any
+    # probe. Stub the URL-safety resolver (same pattern as
+    # tests/test_url_safety.py) so the fake test hosts resolve deterministically
+    # and no real DNS is touched.
+    import src.url_safety as url_safety
+    monkeypatch.setattr(url_safety, "_default_resolver", lambda h: ["127.0.0.1"])
     return settings
 
 
