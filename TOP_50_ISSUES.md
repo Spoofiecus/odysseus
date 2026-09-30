@@ -2,6 +2,11 @@
 
 Ranked from the live issue tracker on 2026-09-30. **1,079 open issues (356 labeled `bug`)**, 1,122 closed.
 
+> **Fix status in this fork (Spoofiecus/odysseus):**
+>
+> - ✅ **#6315 — SSRF via model endpoint URLs — FIXED** — PR [#1](https://github.com/Spoofiecus/odysseus/pull/1) (`fix/models: block SSRF via user-supplied model endpoint URLs`, branch `fix/model-endpoint-ssrf`, targets `dev`). Both `POST /api/model-endpoints` and `POST /api/model-endpoints/test` now validate through `check_outbound_url()`; local-first preserved; `MODELENDPOINT_BLOCK_PRIVATE_IPS=true` for strict mode. 8 new behavioral tests; existing suites updated with a stubbed resolver. Verified: local full suite 5,935 passed; CI on PR #1 — Python tests ✅, CodeQL ✅, gitleaks ✅, syntax checks ✅, pip-audit ✅.
+> - ⚠️ Fork CI note: the `dependency-review (PR gate)` check fails on **every** PR in this fork ("Dependency review is not supported on this repository") because the fork's Dependency graph setting isn't enabled. Fix requires repo-admin action (enable it in Settings → Advanced Security, or merge the guard on local branch `ci/dependency-review-fork-guard` — the bot token lacks `workflows` permission to push it).
+
 **Method:** ranked by a blend of (a) engagement — issue comments and reactions, the "most requested" signal; (b) severity — security, data loss, and authorization failures outrank functional bugs; (c) cluster size — related/duplicate issues counted as one entry. Tiers 1–2 are the critical/biggest-impact fixes; tiers 3–5 complete the top 50.
 
 ---
