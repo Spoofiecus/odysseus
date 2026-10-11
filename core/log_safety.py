@@ -16,12 +16,23 @@ def redact_url(url: str) -> str:
     Keeps scheme, host, port and path so logs stay useful for debugging.
     """
     try:
-        parsed = urlparse(url or "")
+        raw = url or ""
+        parsed = urlparse(raw)
+        schemeless = False
+        if not parsed.netloc and "@" in raw:
+            # No scheme (or an opaque one like "admin:"). urlparse then reads the
+            # userinfo's "admin" as the scheme and leaves "hunter2@host:port/path"
+            # in the path, so urlunparse would reassemble the credential intact.
+            # Re-parse as an authority so the userinfo is dropped.
+            parsed = urlparse("//" + raw)
+            schemeless = True
         host = parsed.hostname or ""
         if ":" in host:  # IPv6 literal — re-bracket so host:port stays unambiguous
             host = f"[{host}]"
         if parsed.port:
             host = f"{host}:{parsed.port}"
+        if schemeless:
+            return f"{host}{parsed.path}"
         return urlunparse((parsed.scheme, host, parsed.path, "", "", ""))
     except Exception:
         return "<endpoint>"

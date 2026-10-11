@@ -30,3 +30,16 @@ def test_empty_and_none():
 def test_garbage_does_not_raise():
     # urlparse is lenient; just assert no credential-looking userinfo survives.
     assert "@" not in redact_url("::::not a url::::")
+
+
+def test_strips_userinfo_without_scheme():
+    # Issue #6266: with no scheme urlparse reads the userinfo's username as the
+    # scheme and the credential survived untouched.
+    assert redact_url("admin:hunter2@10.0.0.5:11434/v1") == "10.0.0.5:11434/v1"
+
+
+def test_schemeless_userinfo_drops_password_only():
+    out = redact_url("user:secret@host.example:8080/api/tags")
+    assert "secret" not in out
+    assert "@" not in out
+    assert out == "host.example:8080/api/tags"
