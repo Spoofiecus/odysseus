@@ -325,7 +325,7 @@ def parse_skill_source(url: str) -> ResolvedSource:
     if len(bits) < 2:
         raise SkillImportError("Invalid GitHub URL")
     owner, repo = bits[0], bits[1]
-    ref = "main"
+    ref = ""
     path = ""
 
     if len(bits) >= 4 and bits[2] in ("tree", "blob"):
@@ -431,9 +431,33 @@ def _list_github_dir(src: ResolvedSource, rel_dir: str, out: Dict[str, str], *, 
         out[rel] = text
 
 
+def _resolve_default_branch(src: ResolvedSource) -> str:
+    """Return the repo's default branch, falling back to ``main``.
+
+    GitHub answers ``404`` for a ``/contents`` request against a ref that does
+    not exist, so a hardcoded ``main`` breaks import from repos whose default
+    branch is ``master`` (or anything else). Ask the repo metadata instead.
+    """
+    url = f"https://api.github.com/repos/{src.owner}/{src.repo}"
+    try:
+        r = _get_checked(url, headers={"Accept": "application/vnd.github+json"}, timeout=20.0)
+    except Exception:
+        return "main"
+    if r.status_code >= 400:
+        return "main"
+    try:
+        body = r.json()
+    except Exception:
+        return "main"
+    branch = str((body or {}).get("default_branch") or "").strip()
+    return branch or "main"
+
+
 def fetch_skill_bundle(url: str) -> Tuple[Dict[str, str], ResolvedSource]:
     """Download SKILL.md and sibling text assets. Returns relative_path → content."""
     src = parse_skill_source(url)
+    if not src.ref:
+        src.ref = _resolve_default_branch(src)
     files: Dict[str, str] = {}
 
     path = _safe_relpath(src.path) if src.path else ""

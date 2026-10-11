@@ -176,3 +176,36 @@ def test_fetch_bytes_surfaces_github_error_detail(monkeypatch):
     _mock_httpx_client(monkeypatch, _Resp())
     with pytest.raises(SkillImportError, match="GitHub request failed \\(403\\): Forbidden"):
         _fetch_bytes("https://raw.githubusercontent.com/o/r/main/SKILL.md")
+
+
+def test_parse_github_root_has_empty_ref():
+    # Issue #5201: a URL without /tree/<branch>/ must not hardcode "main".
+    src = parse_skill_source("https://github.com/octocat/Hello-World")
+    assert (src.owner, src.repo, src.ref, src.path) == ("octocat", "Hello-World", "", "")
+
+
+def test_resolve_default_branch_reads_repo_metadata(monkeypatch):
+    from services.memory.skill_importer import _resolve_default_branch
+
+    class _Resp:
+        status_code = 200
+
+        def json(self):
+            return {"default_branch": "master"}
+
+    monkeypatch.setattr(
+        "services.memory.skill_importer._get_checked", lambda *a, **k: _Resp()
+    )
+    src = ResolvedSource(owner="o", repo="r", ref="", path="")
+    assert _resolve_default_branch(src) == "master"
+
+
+def test_resolve_default_branch_falls_back_to_main(monkeypatch):
+    from services.memory.skill_importer import _resolve_default_branch
+
+    def _boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr("services.memory.skill_importer._get_checked", _boom)
+    src = ResolvedSource(owner="o", repo="r", ref="", path="")
+    assert _resolve_default_branch(src) == "main"
