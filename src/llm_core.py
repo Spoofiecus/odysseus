@@ -775,6 +775,10 @@ def _parse_ollama_response(data: dict) -> str:
 def _host_match(url: str, *domains: str) -> bool:
     """Return True if url's hostname equals any of `domains` or is a subdomain of one.
 
+    A domain may carry a path (``"opencode.ai/zen/go"``) for providers that
+    share one host and are told apart by path; the host part must match as above
+    AND the URL path must equal the given path or sit below it.
+
     Used by helpers that want "is this Anthropic?" / "is this OpenRouter?"
     style checks. Prefer this over substring matching on the URL: the
     substring form gives wrong answers for unrelated paths or query strings
@@ -783,14 +787,29 @@ def _host_match(url: str, *domains: str) -> bool:
     if not url:
         return False
     try:
+        parsed = urlparse(url)
         # rstrip(".") so a fully-qualified host with a trailing dot
         # ("api.anthropic.com.") still matches "anthropic.com".
-        host = (urlparse(url).hostname or "").lower().rstrip(".")
+        host = (parsed.hostname or "").lower().rstrip(".")
     except Exception:
         return False
     if not host:
         return False
-    return any(host == d or host.endswith("." + d) for d in domains)
+    path = parsed.path or ""
+    for d in domains:
+        d = (d or "").lower()
+        if "/" in d:
+            d_host, _, d_rest = d.partition("/")
+            d_path = "/" + d_rest.strip("/")
+            if not (host == d_host or host.endswith("." + d_host)):
+                continue
+            # Boundary-aware so /zenith does not match /zen.
+            if path == d_path or path.startswith(d_path + "/"):
+                return True
+            continue
+        if host == d or host.endswith("." + d):
+            return True
+    return False
 
 
 # Kimi Code subscription keys (api.kimi.com/coding/v1) require a whitelisted

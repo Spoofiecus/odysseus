@@ -322,3 +322,18 @@ def test_stream_llm_threads_discovered_num_ctx(monkeypatch):
     assert seen["num_ctx"] == 32768
     assert seen["stream"] is True
     assert out  # we got the SSE error chunk
+
+
+def test_host_match_supports_path_qualified_domains():
+    # Issue #6281: OpenCode Zen and Go share opencode.ai and differ by path.
+    from src.llm_core import _host_match, _detect_provider, _provider_label
+
+    assert _host_match("https://opencode.ai/zen/go/v1", "opencode.ai/zen/go")
+    assert _host_match("https://opencode.ai/zen/v1", "opencode.ai/zen")
+    assert not _host_match("https://opencode.ai/zen/v1", "opencode.ai/zen/go")
+    assert not _host_match("https://opencode.ai/zenith/v1", "opencode.ai/zen")
+
+    assert _detect_provider("https://opencode.ai/zen/go/v1") == "opencode-go"
+    assert _detect_provider("https://opencode.ai/zen/v1") == "opencode-zen"
+    assert _provider_label("https://opencode.ai/zen/go/v1") == "OpenCode Go"
+    assert _provider_label("https://opencode.ai/zen/v1") == "OpenCode Zen"
