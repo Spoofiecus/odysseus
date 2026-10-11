@@ -427,6 +427,15 @@ class TestIsChatModel:
     def test_legacy_openai_instruct_is_not_chat(self):
         assert _is_chat_model("gpt-3.5-turbo-instruct") is False
 
+    @pytest.mark.parametrize("model_id", [
+        "gpt-5.2-codex", "gpt-5.3-codex-spark", "codex-reliable-coding",
+        "codex-auto-review", "oc/gpt-5.2-codex", "opencode/gpt-5.3-codex",
+    ])
+    def test_codex_models_are_chat(self, model_id):
+        # Issue #6218: a model ID containing "codex" must not be filtered out
+        # on its name alone.
+        assert _is_chat_model(model_id) is True
+
     @pytest.mark.parametrize("bad", [None, 123, 4.5, ["x"], {"a": 1}])
     def test_non_string_id_is_treated_as_chat(self, bad):
         # Defensive boundary: a non-compliant upstream can yield a non-string
