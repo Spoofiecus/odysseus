@@ -764,6 +764,12 @@ def _build_ollama_payload(
         payload["options"] = options
     if tools:
         payload["tools"] = _alias_harmony_tools(tools, model)
+    if _supports_thinking(model):
+        # Ollama's native /api/chat honours `think`; its OpenAI-compat /v1
+        # endpoint silently ignores it. Suppress structured thinking here for
+        # models that would otherwise emit it, so reasoning does not swallow
+        # tool calls inside  thinking blocks on the native path (issue #6213).
+        payload["think"] = False
     return payload
 
 

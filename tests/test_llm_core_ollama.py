@@ -337,3 +337,12 @@ def test_host_match_supports_path_qualified_domains():
     assert _detect_provider("https://opencode.ai/zen/v1") == "opencode-zen"
     assert _provider_label("https://opencode.ai/zen/go/v1") == "OpenCode Go"
     assert _provider_label("https://opencode.ai/zen/v1") == "OpenCode Zen"
+
+
+def test_native_ollama_payload_suppresses_thinking_for_thinking_models():
+    # Issue #6213: only /api/chat honours `think`, and it was never emitted.
+    from src.llm_core import _build_ollama_payload
+
+    msgs = [{"role": "user", "content": "hi"}]
+    assert _build_ollama_payload("qwen3:14b", msgs, 0.7, 100).get("think") is False
+    assert "think" not in _build_ollama_payload("llama3.3:70b", msgs, 0.7, 100)
