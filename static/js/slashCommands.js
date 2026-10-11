@@ -919,7 +919,7 @@ function _syncToggleUI(name, state) {
 }
 
 async function _quickToggle(name) {
-  const toggleMap = { web: 'web-toggle', bash: 'bash-toggle', research: 'research-toggle' };
+  const toggleMap = { web: 'web-toggle', bash: 'bash-toggle', rag: 'rag-toggle', research: 'research-toggle' };
   const chk = document.getElementById(toggleMap[name]);
   if (!chk) return false;
   chk.checked = !chk.checked;
@@ -930,7 +930,7 @@ async function _quickToggle(name) {
 }
 
 async function _applyToggle(name, val) {
-  const toggleMap = { web: 'web-toggle', bash: 'bash-toggle', research: 'research-toggle' };
+  const toggleMap = { web: 'web-toggle', bash: 'bash-toggle', rag: 'rag-toggle', research: 'research-toggle' };
   const chk = document.getElementById(toggleMap[name]);
   if (!chk) return;
   const newState = val === 'on' ? true : val === 'off' ? false : !chk.checked;
@@ -1218,6 +1218,8 @@ async function _cmdSessionExport(args, ctx) {
 async function _cmdToggleWeb(args, ctx) { const v = (args[0]||'').toLowerCase(); if (v === 'on' || v === 'off') _applyToggle('web', v); else _quickToggle('web'); return true; }
 async function _cmdToggleBash(args, ctx) { const v = (args[0]||'').toLowerCase(); if (v === 'on' || v === 'off') _applyToggle('bash', v); else _quickToggle('bash'); return true; }
 async function _cmdToggleRag(args, ctx) { const v = (args[0]||'').toLowerCase(); if (v === 'on' || v === 'off') _applyToggle('rag', v); else _quickToggle('rag'); return true; }
+async function _cmdRagOn(args, ctx) { return _cmdToggleRag(['on'], ctx); }
+async function _cmdRagOff(args, ctx) { return _cmdToggleRag(['off'], ctx); }
 async function _cmdToggleResearch(args, ctx) { const v = (args[0]||'').toLowerCase(); if (v === 'on' || v === 'off') _applyToggle('research', v); else _quickToggle('research'); return true; }
 async function _cmdToggleIncognito(args, ctx) {
   const sessions = sessionModule.getSessions();
@@ -1290,7 +1292,7 @@ async function _cmdWorkspace(args, ctx) {
 async function _cmdToggleShow(args, ctx) {
   const name = (args[0] || '').toLowerCase();
   const val = (args[1] || '').toLowerCase();
-  const toggleMap = { web: 'web-toggle', bash: 'bash-toggle', research: 'research-toggle' };
+  const toggleMap = { web: 'web-toggle', bash: 'bash-toggle', rag: 'rag-toggle', research: 'research-toggle' };
   if (!name || !toggleMap[name]) {
     const status = Object.keys(toggleMap).map(k => {
       const chk = document.getElementById(toggleMap[k]);
@@ -5831,7 +5833,9 @@ const COMMANDS = {
     subs: {
       'list':   { handler: _cmdRagList,   alias: ['ls'],       help: 'List indexed files',    usage: '/rag list' },
       'add':    { handler: _cmdRagAdd,    alias: [],           help: 'Add directory',         usage: '/rag add /path' },
-      'remove': { handler: _cmdRagRemove, alias: ['rm'],       help: 'Remove directory',      usage: '/rag remove /path' }
+      'remove': { handler: _cmdRagRemove, alias: ['rm'],       help: 'Remove directory',      usage: '/rag remove /path' },
+      'on':     { handler: _cmdRagOn,     alias: [],           help: 'Turn RAG on',           usage: '/rag on' },
+      'off':    { handler: _cmdRagOff,    alias: [],           help: 'Turn RAG off',          usage: '/rag off' }
     }
   },
   todo: {
