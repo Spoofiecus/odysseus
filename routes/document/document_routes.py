@@ -1,5 +1,7 @@
 """Document routes — CRUD for living documents with version history."""
 
+import json
+import re
 import uuid
 import logging
 from datetime import datetime, timezone
@@ -24,6 +26,42 @@ def _get_session_or_404(db, session_id: str, user: Optional[str]):
     if user and session.owner != user:
         raise HTTPException(404, "Session not found")
     return session
+
+
+def _pdf_extract_head(content: str, title: str) -> str:
+    """Preserve the front-matter marker + first H1 of a document body.
+
+    Falls back to a synthesized heading. ``content.splitlines()[0]`` raised
+    IndexError on empty content (issue #5056).
+    """
+    head_re = re.compile(r'^(<!--[^>]+-->\s*\n+#[^\n]*\n+)', re.MULTILINE)
+    head_match = head_re.match(content or "")
+    if head_match:
+        return head_match.group(1)
+    lines = (content or "").splitlines()
+    first = lines[0] if lines else ""
+    if first:
+        return first + "\n\n# " + (title or "PDF") + "\n\n"
+    return "# " + (title or "PDF") + "\n\n"
+
+
+def _parse_tidy_verdicts(response: str) -> list:
+    """Parse the model's junk/keep verdict array, or raise a clean 500.
+
+    The non-greedy ``\[.*?\]`` match can capture a bracket group from prose
+    ("I looked [at the docs] and decided: [...]"), so ``json.loads`` used to
+    raise an unhandled JSONDecodeError (issue #5056).
+    """
+    match = re.search(r'\[.*?\]', response or "", re.DOTALL)
+    if not match:
+        raise HTTPException(500, "AI returned invalid response")
+    try:
+        verdicts = json.loads(match.group())
+    except (ValueError, TypeError):
+        raise HTTPException(500, "AI returned invalid response")
+    if not isinstance(verdicts, list):
+        raise HTTPException(500, "AI returned invalid response")
+    return verdicts
 
 
 def _aggregate_language_facets(lang_rows):
@@ -537,9 +575,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
 
             # Preserve everything up through the title (front-matter marker +
             # first H1) and replace the rest with the freshly extracted text.
-            head_re = re.compile(r'^(<!--[^>]+-->\s*\n+#[^\n]*\n+)', re.MULTILINE)
-            head_match = head_re.match(content)
-            head = head_match.group(1) if head_match else (content.splitlines()[0] + "\n\n# " + (doc.title or "PDF") + "\n\n")
+            head = _pdf_extract_head(content, doc.title or "PDF")
             doc.current_content = head + body_text.strip() + "\n"
             doc.version_count = (doc.version_count or 1) + 1
             db.add(DocumentVersion(
@@ -1021,14 +1057,9 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
                 timeout=30,
             )
 
-            # Parse verdicts
-            import re
-            match = re.search(r'\[.*?\]', response, re.DOTALL)
-            if not match:
-                raise HTTPException(500, "AI returned invalid response")
-
-            import json as _json
-            verdicts = _json.loads(match.group())
+            # Parse verdicts (guarded: the non-greedy match can capture a
+            # bracket group from prose, not the verdict array).
+            verdicts = _parse_tidy_verdicts(response)
 
             deleted = 0
             reviewed = 0
