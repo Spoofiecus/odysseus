@@ -273,6 +273,7 @@ if AUTH_ENABLED:
         "/api/health",
         "/api/version",
         "/login",
+        "/sw.js",
     }
     AUTH_EXEMPT_PREFIXES = ["/static"]
     # Dynamic paths whose own handler proves identity via a path-embedded
@@ -490,6 +491,24 @@ class _RevalidatingStatic(StaticFiles):
 
 
 app.mount("/static", _RevalidatingStatic(directory=STATIC_DIR), name="static")
+
+# ========= PWA SERVICE WORKER =========
+@app.get("/sw.js")
+async def serve_service_worker():
+    """Serve the service worker from the app root.
+
+    A worker served from /static/sw.js can only control /static/ (the default
+    scope is the script's own directory), so the offline shell never applied to
+    the app root and navigator.serviceWorker.controller stayed null. Serving it
+    at /sw.js gives it a root scope, matching manifest.json's "scope": "/"
+    (issue #6219).
+    """
+    return FileResponse(
+        os.path.join(STATIC_DIR, "sw.js"),
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
+    )
+
 
 # ========= GENERATED IMAGES =========
 @app.get("/api/generated-image/{filename}")
