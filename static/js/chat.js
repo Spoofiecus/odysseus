@@ -5654,6 +5654,16 @@ import { loadPanel } from './panels.js';
       if (replaceFromHere) {
         // Regenerate flows intentionally trim history to this point before
         // resubmitting. The plain "Resend message" action must not do this.
+        // That truncate is a permanent server-side delete, so warn first when
+        // later messages exist (#6224).
+        const _laterCount = allMsgs.length - 1 - msgIndex;
+        if (_laterCount > 0 && typeof window !== 'undefined' && window.confirm) {
+          const _ok = window.confirm(
+            `Regenerate from here?\n\nThis permanently deletes the ${_laterCount} ` +
+            `message${_laterCount === 1 ? '' : 's'} after this one. This cannot be undone.`
+          );
+          if (!_ok) return;
+        }
         const keepCount = msgIndex;
         await fetch(`${API_BASE}/api/session/${sessionId}/truncate`, {
           method: 'POST',
@@ -5690,6 +5700,18 @@ import { loadPanel } from './panels.js';
     const allMsgs = Array.from(box.querySelectorAll('.msg'));
     const aiIndex = allMsgs.indexOf(aiMsgElement);
     if (aiIndex < 0) return;
+
+    // Truncating from here permanently deletes every later message server side.
+    // Confirm when later messages exist; regenerating the last exchange is the
+    // everyday case and stays frictionless (#6224).
+    const _laterCount = allMsgs.length - 1 - aiIndex;
+    if (_laterCount > 0 && typeof window !== 'undefined' && window.confirm) {
+      const _ok = window.confirm(
+        `Regenerate from here?\n\nThis permanently deletes the ${_laterCount} ` +
+        `message${_laterCount === 1 ? '' : 's'} after this one. This cannot be undone.`
+      );
+      if (!_ok) return;
+    }
 
     // Find the preceding user message
     let userIndex = -1;
