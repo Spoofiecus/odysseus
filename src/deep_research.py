@@ -867,20 +867,29 @@ class DeepResearcher:
         return []
 
     def _parse_json_object(self, text: str) -> Optional[Dict]:
-        """Extract a JSON object from LLM output."""
+        """Extract a JSON object from LLM output.
+
+        Only ever returns a dict. ``json.loads`` happily returns an array,
+        string, number, or bool, and the callers do ``parsed.get(...)`` — so a
+        JSON array from the model used to raise AttributeError (#5076).
+        """
         text = self._strip_code_block(text)
         try:
-            return json.loads(text)
+            parsed = json.loads(text)
         except json.JSONDecodeError:
-            pass
+            parsed = None
+        if isinstance(parsed, dict):
+            return parsed
 
         # Greedy match to capture the full outermost object
         match = re.search(r'\{[\s\S]*\}', text)
         if match:
             try:
-                return json.loads(match.group())
+                parsed = json.loads(match.group())
             except json.JSONDecodeError:
-                pass
+                parsed = None
+            if isinstance(parsed, dict):
+                return parsed
 
         return None
 
