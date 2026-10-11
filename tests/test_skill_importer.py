@@ -209,3 +209,46 @@ def test_resolve_default_branch_falls_back_to_main(monkeypatch):
     monkeypatch.setattr("services.memory.skill_importer._get_checked", _boom)
     src = ResolvedSource(owner="o", repo="r", ref="", path="")
     assert _resolve_default_branch(src) == "main"
+
+
+def test_strip_bundle_prefix_reroots_keys():
+    from services.memory.skill_importer import _strip_bundle_prefix
+
+    files = {
+        "plugins/p/skills/my-skill/SKILL.md": "a",
+        "plugins/p/skills/my-skill/scripts/run.py": "b",
+        "plugins/p/skills/other/SKILL.md": "c",
+    }
+    out = _strip_bundle_prefix(files, "plugins/p/skills/my-skill")
+    assert out["SKILL.md"] == "a"
+    assert out["scripts/run.py"] == "b"
+    assert out["plugins/p/skills/other/SKILL.md"] == "c"
+
+
+def test_strip_bundle_prefix_noop_for_root():
+    from services.memory.skill_importer import _strip_bundle_prefix
+
+    files = {"SKILL.md": "a"}
+    assert _strip_bundle_prefix(files, "") == files
+
+
+def test_fetch_skill_bundle_reroots_directory_paths(monkeypatch):
+    import services.memory.skill_importer as si
+    from services.memory.skill_importer import fetch_skill_bundle
+
+    def fake_fetch_text(url):
+        return "content"
+
+    def fake_list(src, rel_dir, out, depth=0):
+        out[f"{rel_dir}/SKILL.md"] = "body"
+        out[f"{rel_dir}/scripts/run.py"] = "print(1)"
+
+    monkeypatch.setattr(si, "_fetch_text", fake_fetch_text)
+    monkeypatch.setattr(si, "_list_github_dir", fake_list)
+
+    files, _src = fetch_skill_bundle(
+        "https://github.com/o/r/tree/main/plugins/p/skills/my-skill"
+    )
+    assert "SKILL.md" in files
+    assert "scripts/run.py" in files
+    assert not any(k.startswith("plugins/") for k in files)

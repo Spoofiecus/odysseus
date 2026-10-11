@@ -453,6 +453,29 @@ def _resolve_default_branch(src: ResolvedSource) -> str:
     return branch or "main"
 
 
+def _strip_bundle_prefix(files: Dict[str, str], prefix: str) -> Dict[str, str]:
+    """Re-root bundle keys at the requested source folder.
+
+    ``fetch_skill_bundle`` returns paths relative to the repo root (what the
+    GitHub contents API yields). Writing those verbatim under the skill dir
+    duplicates SKILL.md at its repo path, and the recursive skills walk then
+    surfaces the nested copy as a second, ownerless skill (issue #5200).
+    """
+    prefix = (prefix or "").strip("/")
+    if not prefix:
+        return files
+    head = prefix + "/"
+    out: Dict[str, str] = {}
+    for rel, content in files.items():
+        if rel == prefix:
+            out[rel.rsplit("/", 1)[-1]] = content
+        elif rel.startswith(head):
+            out[rel[len(head):]] = content
+        else:
+            out[rel] = content
+    return out
+
+
 def fetch_skill_bundle(url: str) -> Tuple[Dict[str, str], ResolvedSource]:
     """Download SKILL.md and sibling text assets. Returns relative_path → content."""
     src = parse_skill_source(url)
@@ -469,23 +492,24 @@ def fetch_skill_bundle(url: str) -> Tuple[Dict[str, str], ResolvedSource]:
                 _list_github_dir(src, parent, files)
             except SkillImportError:
                 pass
-        return files, src
+        return _strip_bundle_prefix(files, parent), src
 
     if path:
         try:
             _fetch_text(_raw_url(src, f"{path}/SKILL.md"))
             _list_github_dir(src, path, files)
-            return files, src
+            return _strip_bundle_prefix(files, path), src
         except Exception:
             pass
         try:
             text = _fetch_text(_raw_url(src, path))
             if path.lower().endswith(".md"):
                 files[path] = text
-                return files, src
+                return _strip_bundle_prefix(files, "/".join(path.split("/")[:-1])), src
         except Exception:
             pass
         _list_github_dir(src, path, files)
+        files = _strip_bundle_prefix(files, path)
     else:
         _list_github_dir(src, "", files)
 
