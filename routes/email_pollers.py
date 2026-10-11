@@ -506,6 +506,43 @@ async def _auto_summarize_pass(days_back: int = 1, account_id: str | None = None
     )
 
 
+def _persist_email_summary(
+    *,
+    message_id: str,
+    owner: str,
+    uid: str,
+    folder: str,
+    subject: str,
+    sender: str,
+    summary: str,
+    model: str,
+) -> None:
+    """Persist one auto-summary row, always closing the SQLite connection.
+
+    The connection is opened outside the try so a failed execute/commit (disk
+    full, "database is locked", schema drift) still hits the finally and closes
+    it; otherwise one connection leaks per crashed write on the 30-minute
+    poller (issue #5053).
+    """
+    import sqlite3 as _sql3
+    conn = _sql3.connect(SCHEDULED_DB)
+    try:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO email_summaries
+            (message_id, owner, uid, folder, subject, sender, summary, model_used, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                message_id, owner, uid, folder, subject, sender, summary, model,
+                datetime.utcnow().isoformat(),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None = None, max_process: int | None = None, progress_cb=None, away_only: bool = False) -> str:
     """Single pass of the auto-summarize/reply scan for ONE account.
     Reads current settings flags."""
@@ -799,14 +836,16 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
                             timeout=240,
                         )
                         if summary:
-                            _c = _sql3.connect(SCHEDULED_DB)
-                            _c.execute("""
-                                INSERT OR REPLACE INTO email_summaries
-                                (message_id, owner, uid, folder, subject, sender, summary, model_used, created_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, (message_id, account_owner or "", uid.decode() if isinstance(uid, bytes) else str(uid), _folder, subject, sender, summary, model, datetime.utcnow().isoformat()))
-                            _c.commit()
-                            _c.close()
+                            _persist_email_summary(
+                                message_id=message_id,
+                                owner=account_owner or "",
+                                uid=uid.decode() if isinstance(uid, bytes) else str(uid),
+                                folder=_folder,
+                                subject=subject,
+                                sender=sender,
+                                summary=summary,
+                                model=model,
+                            )
                             _sum_existing.add(message_id)
                             _summaries_created += 1
                             _uid_text = uid.decode() if isinstance(uid, bytes) else str(uid)
