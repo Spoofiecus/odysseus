@@ -30,6 +30,28 @@ def _internal_headers() -> dict:
     return {INTERNAL_TOOL_HEADER: INTERNAL_TOOL_TOKEN}
 
 
+def _serve_port_from_cmd(cmd: str) -> int:
+    """Resolve the port a serve command binds.
+
+    Must match ``_auto_register_llm_endpoint`` so the cleanup URL is the same.
+    Bracketed IPv6 ``OLLAMA_HOST`` values (``[::1]:11435``) go through the shared
+    parser: a naive ``:(\d+)`` regex matches the inner IPv6 colon and captures
+    port 1, so the real endpoint is never deleted.
+    """
+    import re as _re
+    port_match = _re.search(r"--port\s+(\d+)", cmd)
+    if port_match:
+        return int(port_match.group(1))
+    if "OLLAMA_HOST" in cmd:
+        try:
+            from routes.cookbook_helpers import _ollama_bind_from_cmd
+            _, port = _ollama_bind_from_cmd(cmd)
+            return int(port)
+        except Exception:
+            pass
+    return 11434 if "ollama" in cmd else 8080
+
+
 async def _delete_endpoint_for_task(task: dict) -> None:
     """Drop the auto-registered model endpoint for a scheduled-stop serve.
 
@@ -44,7 +66,6 @@ async def _delete_endpoint_for_task(task: dict) -> None:
             task.get("sessionId") or task.get("id") or "",
         )
         return
-    import re as _re
     payload = task.get("payload") or {}
     cmd = str(payload.get("_cmd") or "")
     remote = task.get("remoteHost") or ""
@@ -53,16 +74,7 @@ async def _delete_endpoint_for_task(task: dict) -> None:
         host = remote.split("@")[-1] if "@" in remote else remote
     else:
         host = "host.docker.internal"
-    port_match = _re.search(r"--port\s+(\d+)", cmd)
-    ollama_host_match = _re.search(r"OLLAMA_HOST=[^\s]*?:(\d+)", cmd)
-    if port_match:
-        port = int(port_match.group(1))
-    elif ollama_host_match:
-        port = int(ollama_host_match.group(1))
-    elif "ollama" in cmd:
-        port = 11434
-    else:
-        port = 8080
+    port = _serve_port_from_cmd(cmd)
     base_url = f"http://{host}:{port}/v1"
     try:
         async with httpx.AsyncClient(timeout=8) as client:

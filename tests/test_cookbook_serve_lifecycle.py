@@ -48,3 +48,22 @@ async def test_tick_persists_only_successfully_stopped_serves(tmp_path, monkeypa
     assert tasks["stop-succeeds"]["_scheduledStopAtMs"] is None
     assert tasks["stop-fails"]["status"] == "running"
     assert tasks["stop-fails"]["_scheduledStopAtMs"] == 0
+
+
+def test_serve_port_parses_bracketed_ipv6_ollama_host():
+    # Issue #5079: a naive :(\d+) regex matched the inner IPv6 colon and
+    # captured port 1 instead of 11435.
+    assert lifecycle._serve_port_from_cmd("OLLAMA_HOST=[::1]:11435 ollama serve") == 11435
+
+
+def test_serve_port_parses_ipv4_ollama_host():
+    assert lifecycle._serve_port_from_cmd("OLLAMA_HOST=0.0.0.0:11500 ollama serve") == 11500
+
+
+def test_serve_port_prefers_explicit_port_flag():
+    assert lifecycle._serve_port_from_cmd("llama-server --port 8080") == 8080
+
+
+def test_serve_port_defaults():
+    assert lifecycle._serve_port_from_cmd("ollama serve") == 11434
+    assert lifecycle._serve_port_from_cmd("vllm serve some/model") == 8080
