@@ -33,3 +33,11 @@ def test_explicit_phrases_still_match():
 def test_blank_input_is_falsy():
     assert not _looks_like_local_computer_request("")
     assert not _looks_like_local_computer_request(None)
+
+
+def test_email_and_calendar_phrases_are_not_machine_references():
+    # Issue #6194: "from <sender>" / "on <day>" must not be read as a machine
+    # name and swap the toolset for the Terminus file/shell tools.
+    assert not _looks_like_local_computer_request("show me the email from lisa")
+    assert not _looks_like_local_computer_request("summarize emails from yesterday")
+    assert not _looks_like_local_computer_request("add a meeting on tuesday")
