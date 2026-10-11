@@ -232,16 +232,21 @@ export async function refreshModels(force = false, opts = {}) {
     const groups = { local: {}, api: {} };
     // Also track extra (non-curated) models per endpoint
     const extraGroups = { local: {}, api: {} };
+    // One Ollama endpoint serves both on-machine models and hosted "cloud"
+    // models. The endpoint-level category cannot be right for both, and the
+    // label answers "does this prompt stay on my machine?". Hosted models carry
+    // a `-cloud` / `:cloud` suffix on the tag, so reclassify those as API (#6217).
+    const modelRunsRemotely = (mid) => /(?:^|[-/:])cloud$/i.test(String(mid || ''));
     if (_cachedItems && _cachedItems.length > 0) {
       _cachedItems.forEach(item => {
-        const cat = item.category === 'local' ? 'local' : 'api';
+        const epCat = item.category === 'local' ? 'local' : 'api';
         const epName = item.endpoint_name || 'Unknown';
         const isOffline = !!item.offline;
-        if (!groups[cat][epName]) groups[cat][epName] = [];
-        if (!extraGroups[cat][epName]) extraGroups[cat][epName] = [];
         const displayNames = item.models_display || item.models || [];
         const epModelType = item.model_type || 'llm';
         (item.models || []).forEach((mid, i) => {
+          const cat = modelRunsRemotely(mid) ? 'api' : epCat;
+          if (!groups[cat][epName]) groups[cat][epName] = [];
           groups[cat][epName].push({
             mid, url: item.url,
             displayName: displayNames[i] || mid,
@@ -253,6 +258,8 @@ export async function refreshModels(force = false, opts = {}) {
         // Extra (non-curated) models from server
         const extraDisplayNames = item.models_extra_display || item.models_extra || [];
         (item.models_extra || []).forEach((mid, i) => {
+          const cat = modelRunsRemotely(mid) ? 'api' : epCat;
+          if (!extraGroups[cat][epName]) extraGroups[cat][epName] = [];
           extraGroups[cat][epName].push({
             mid, url: item.url,
             displayName: extraDisplayNames[i] || mid,
