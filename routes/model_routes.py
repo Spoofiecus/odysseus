@@ -618,6 +618,32 @@ _NON_CHAT_EXACT_PREFIXES = (
 )
 
 
+def _validate_endpoint_url_or_400(base_url: str) -> None:
+    """Reject SSRF-prone model endpoint URLs (issue #6315).
+
+    Mirrors the check_outbound_url() guard the embedding / contacts / gallery /
+    webhook routes already apply. Cloud-metadata (link-local) and non-HTTP(S)
+    URLs are always rejected. Loopback/LAN stay allowed by default for
+    local-first installs; set MODEL_ENDPOINT_BLOCK_PRIVATE_IPS=true for full
+    lockdown.
+    """
+    from src.url_safety import check_outbound_url
+    ok, reason = check_outbound_url(
+        base_url,
+        block_private=os.getenv("MODEL_ENDPOINT_BLOCK_PRIVATE_IPS", "false").lower() == "true",
+    )
+    if ok:
+        return
+    # An unresolvable host cannot be classified (offline LAN names, a box that
+    # is currently down). Do not reject those — the endpoint may come up later
+    # and the probe will simply fail. Everything classifiable (bad scheme,
+    # link-local/metadata, reserved, or private/loopback in strict mode) is
+    # rejected.
+    if "does not resolve" in reason:
+        return
+    raise HTTPException(400, f"Rejected endpoint URL: {reason}")
+
+
 def _is_chat_model(model_id: str) -> bool:
     """Return True if the model ID looks like a chat/completions-capable model."""
     if not isinstance(model_id, str):
@@ -2011,6 +2037,7 @@ def setup_model_routes(model_discovery):
         base_url = _normalize_base(base_url)
         if not base_url:
             raise HTTPException(400, "Base URL is required")
+        _validate_endpoint_url_or_400(base_url)
         # Resolve hostname via Tailscale if DNS fails
         from src.endpoint_resolver import resolve_url
         base_url = resolve_url(base_url)
@@ -2235,6 +2262,7 @@ def setup_model_routes(model_discovery):
         base_url = _normalize_base(base_url)
         if not base_url:
             raise HTTPException(400, "Base URL is required")
+        _validate_endpoint_url_or_400(base_url)
         from src.endpoint_resolver import resolve_url
         base_url = resolve_url(base_url)
         base_url = _rewrite_loopback_for_docker(base_url)
