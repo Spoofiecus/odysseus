@@ -38,6 +38,16 @@ import { createTerminalStreamError, isRecoverableStreamError } from './chatStrea
 import { loadPanel } from './panels.js';
 
   const RESEARCH_TIMEOUT_MS = 360000;
+
+  // A bare substring match on "tool"/"auto" used to demote agent mode for
+  // unrelated errors ("tool execution timed out", "automatic retry", "MCP
+  // server not connected") and persist that to localStorage, so every later
+  // message in the conversation silently ran without tools (#5766). Match only
+  // genuine "this model cannot do tool calls" signals.
+  const TOOL_UNSUPPORTED_RE = /(?:tool|function)[^\n]{0,60}not\s+support|not\s+support[^\n]{0,60}(?:tool|function)|unsupported[^\n]{0,40}(?:tool|function)|(?:tool|function)[^\n]{0,40}unsupported/i;
+  function isToolUnsupportedError(text) {
+    return TOOL_UNSUPPORTED_RE.test(String(text || ''));
+  }
   const DEFAULT_TIMEOUT_MS = 120000;
   const RUN_ID_ABORT_GRACE_MS = 2000; // timeout waits this long for a run-id header before hard-aborting
   const RESEARCH_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>';
@@ -2111,8 +2121,9 @@ import { loadPanel } from './panels.js';
           if (m) errText = m[1].replace(/\\"/g, '"');
           else if (errBody.length < 200) errText = errBody;
         } catch {}
-        // Auto-switch to chat mode for tool-related errors
-        if (errText.includes('tool') || errText.includes('auto')) {
+        // Auto-switch to chat mode only when the model genuinely cannot do
+        // tool calls (not for any error that merely mentions "tool"/"auto").
+        if (isToolUnsupportedError(errText)) {
           errText = 'This model doesn\'t support agent tools — switched to Chat mode. Try again.';
           const _ab = document.getElementById('mode-agent-btn');
           const _cb = document.getElementById('mode-chat-btn');
@@ -4529,7 +4540,7 @@ import { loadPanel } from './panels.js';
             if (errorHolder) {
               let errMsg = `Error: ${err.message}`;
               // Add hint for tool-call errors
-              if (err.message && (err.message.includes('tool') || err.message.includes('auto'))) {
+              if (isToolUnsupportedError(err.message)) {
                 errMsg += '\n\nThis model may not support tools — try switching to Chat mode.';
               }
               typewriterInto(errorHolder, errMsg);
