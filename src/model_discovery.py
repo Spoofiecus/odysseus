@@ -222,16 +222,17 @@ class ModelDiscovery:
         ports += [p for p in sorted(self._extra_ports) if p not in ports]
         targets = [(h, p) for h in hosts for p in ports]
 
-        seen_models = (
-            set()
-        )  # dedupe by (port, model_ids) to avoid same machine via different IPs
+        # Dedupe on (host, port, model_ids). The host must be part of the key:
+        # two distinct machines serving the same model list on the same port
+        # used to collapse into a single result (issue #6221).
+        seen_models = set()
 
         with ThreadPoolExecutor(max_workers=50) as pool:
             futures = {pool.submit(self._check_port, h, p): (h, p) for h, p in targets}
             for future in as_completed(futures):
                 result = future.result()
                 if result:
-                    key = (result["port"], tuple(sorted(result["models"])))
+                    key = (result["host"], result["port"], tuple(sorted(result["models"])))
                     if key not in seen_models:
                         seen_models.add(key)
                         items.append(result)
