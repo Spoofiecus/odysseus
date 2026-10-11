@@ -1180,7 +1180,12 @@ _EXPLICIT_WORKSPACE_REFERENCE_RE = re.compile(
 _LOCAL_COMPUTER_REFERENCE_RE = re.compile(
     r"\b(?:on|from|in|using|with)\s+(?:this|my|the)\s+(?:computer|machine|pc|laptop|device|system)\b"
     r"|\b(?:local|host)\s+(?:computer|machine|files?|system)\b"
-    r"|\b(?:on|from)\s+(?!this\b|my\b|the\b|a\b|an\b)(?:[a-z][a-z0-9_.-]{1,31})\b",
+    # "on <named machine>" / "from <named machine>" (Cookbook server name or SSH
+    # alias). Require the token to look machine-shaped — it must contain at least
+    # one digit, dot, underscore, or hyphen — so ordinary prose like
+    # "waiting on items" or "one line on anything tomorrow" no longer trips it.
+    r"|\b(?:on|from)\s+(?!this\b|my\b|the\b|a\b|an\b)"
+    r"(?=[a-z][a-z0-9_.-]*[0-9._-])[a-z][a-z0-9_.-]{1,31}\b",
     re.IGNORECASE,
 )
 
@@ -3864,6 +3869,10 @@ async def stream_agent_loop(
     # RAG-based tool selection: retrieve relevant tools for this query.
     # If caller provided a pre-computed set (e.g. task_scheduler), use that.
     _relevant_tools = relevant_tools
+    # A caller-supplied set (e.g. from task_scheduler) is deliberately composed.
+    # Remember that so the workspace/local-machine override below can never
+    # discard it wholesale.
+    _caller_provided_tools = bool(relevant_tools)
     _t1 = time.time()
     if _relevant_tools:
         logger.info(f"[tool-rag] Using caller-provided relevant_tools ({len(_relevant_tools)} tools)")
@@ -3982,6 +3991,7 @@ async def stream_agent_loop(
                 )
                 or _looks_like_local_computer_request(_retrieval_query or _last_user)
             )
+            and not _caller_provided_tools
             and not _active_document_relevant
             and not active_email
         ):
