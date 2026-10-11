@@ -43,6 +43,18 @@ async def do_manage_endpoints(content: str, owner: Optional[str] = None) -> Dict
             api_key = args.get("api_key", "")
             if not base_url:
                 return {"error": "base_url is required", "exit_code": 1}
+            # SSRF hardening: this tool is prompt-injection reachable (the model
+            # can be told to add an endpoint), so apply the same outbound-URL
+            # guard the HTTP routes use before storing a URL the background
+            # model-refresh will later fetch. Loopback/LAN stay allowed by
+            # default; set MODEL_ENDPOINT_BLOCK_PRIVATE_IPS=true for full lockdown.
+            from src.url_safety import check_outbound_url
+            ok, reason = check_outbound_url(
+                base_url,
+                block_private=os.getenv("MODEL_ENDPOINT_BLOCK_PRIVATE_IPS", "false").lower() == "true",
+            )
+            if not ok:
+                return {"error": f"Rejected endpoint URL: {reason}", "exit_code": 1}
             eid = str(_uuid.uuid4())[:8]
             from datetime import datetime
             ep = ModelEndpoint(id=eid, name=name or base_url, base_url=base_url,
