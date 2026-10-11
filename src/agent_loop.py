@@ -842,6 +842,24 @@ def _compact_tool_line(name: str, section: str) -> str:
     return f"- `{name}` — " + lines[0][:160]
 
 
+def _strip_disabled_tool_rules(rules: str, disabled: set) -> str:
+    """Drop rule lines that instruct the model to use a disabled tool.
+
+    A rule like "User identity facts use ``manage_memory``" is actively harmful
+    when ``manage_memory`` has no schema this turn: the model resolves the
+    contradiction by making no tool call at all (issue #6285).
+    """
+    if not rules or not disabled:
+        return rules
+    kept = []
+    for line in rules.split("\n"):
+        refs = re.findall(r"`([A-Za-z_][A-Za-z0-9_]*)`", line)
+        if refs and any(ref in disabled for ref in refs):
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def _assemble_prompt(tool_names: set, disabled_tools: set = None, compact: bool = False) -> str:
     """Build the system prompt with only the specified tools included."""
     disabled = disabled_tools or set()
@@ -857,7 +875,7 @@ def _assemble_prompt(tool_names: set, disabled_tools: set = None, compact: bool 
             "Only the tool schemas provided by the API are available for this turn. "
             "Use native tool calls when action is needed; do not write tool syntax or tool instructions in chat.",
             "## Available tools\n" + ("\n".join(tool_lines) if tool_lines else "none"),
-            _API_AGENT_RULES,
+            _strip_disabled_tool_rules(_API_AGENT_RULES, disabled),
         ]
         parts.extend(_domain_rules_for_tools(included))
         return "\n\n".join(parts)
@@ -885,7 +903,7 @@ def _assemble_prompt(tool_names: set, disabled_tools: set = None, compact: bool 
     if one_liners:
         parts.append("## Additional tools\n" + "\n".join(one_liners))
 
-    parts.append(_AGENT_RULES)
+    parts.append(_strip_disabled_tool_rules(_AGENT_RULES, disabled))
     parts.extend(_domain_rules_for_tools(included))
     return "\n\n".join(parts)
 
