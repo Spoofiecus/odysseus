@@ -124,9 +124,22 @@ def _parse_scalar(raw: str) -> Any:
 
 
 def _split_top_level(s: str, sep: str) -> List[str]:
-    """Split `s` on `sep` ignoring separators inside [] or quotes."""
-    out, buf, depth, quote = [], [], 0, None
+    """Split `s` on `sep` ignoring separators inside [] or quotes.
+
+    A backslash escapes the next character, so an escaped quote inside a
+    double-quoted value does not close it (issue #6264). Without this a tag like
+    ``review "release, notes`` was split at the comma after reload.
+    """
+    out, buf, depth, quote, escaped = [], [], 0, None, False
     for ch in s:
+        if escaped:
+            buf.append(ch)
+            escaped = False
+            continue
+        if ch == "\\":
+            buf.append(ch)
+            escaped = True
+            continue
         if quote:
             buf.append(ch)
             if ch == quote:

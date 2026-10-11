@@ -212,3 +212,18 @@ def test_description_survives_real_save_load_cycles_on_disk(tmp_path):
         encoding="utf-8"
     )
     assert GERMAN in on_disk
+
+
+# Issue #6264: an escaped quote must not end a quoted list value.
+
+def test_escaped_quote_in_list_value_does_not_split_on_comma():
+    tags = ['review "release, notes', "next"]
+    loaded = Skill.from_markdown(Skill(name="release-review", tags=tags).to_markdown())
+    assert loaded.tags == tags
+
+
+def test_split_top_level_respects_escaped_quotes():
+    from services.memory.skill_format import _split_top_level
+
+    parts = _split_top_level(r'"a \"b, c", "d"', ",")
+    assert parts == [r'"a \"b, c"', '"d"']
