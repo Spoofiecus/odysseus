@@ -21,6 +21,34 @@ INTERNAL_TOOL_TOKEN = os.environ.get("ODYSSEUS_INTERNAL_TOKEN") or secrets.token
 INTERNAL_TOOL_HEADER = "X-Odysseus-Internal-Token"
 
 
+# Headers that prove a request was forwarded by a proxy/tunnel (cloudflared,
+# nginx, Caddy, Tailscale Funnel, …). cloudflared connects to the app FROM
+# 127.0.0.1, so without this check every tunneled request would look like
+# loopback and could bypass auth.
+PROXY_FORWARDING_HEADERS = (
+    "cf-connecting-ip", "cf-ray", "cf-visitor",
+    "x-forwarded-for", "x-forwarded-host", "x-real-ip", "forwarded",
+)
+
+
+def is_trusted_loopback(request: Request) -> bool:
+    """True ONLY for a DIRECT loopback connection with no proxy/tunnel
+    forwarding headers.
+
+    A bare ``client.host in ('127.0.0.1', '::1')`` check is unsafe behind a
+    Cloudflare tunnel / reverse proxy: those connect from loopback, so a remote
+    visitor would otherwise inherit local trust. Odysseus's own in-process
+    agent loopback calls carry none of these headers, so they still qualify.
+    """
+    host = request.client.host if request.client else None
+    if host not in ("127.0.0.1", "::1"):
+        return False
+    for header in PROXY_FORWARDING_HEADERS:
+        if request.headers.get(header):
+            return False
+    return True
+
+
 def get_application_route_path(scope: Mapping[str, object]) -> str:
     """Return the application-relative path used by Starlette routing.
 
@@ -65,7 +93,11 @@ def require_admin(request: Request):
     #     request.state.current_user = "internal-tool".
     try:
         hdr = request.headers.get(INTERNAL_TOOL_HEADER)
-        if hdr and secrets.compare_digest(hdr, INTERNAL_TOOL_TOKEN):
+        if (
+            hdr
+            and secrets.compare_digest(hdr, INTERNAL_TOOL_TOKEN)
+            and is_trusted_loopback(request)
+        ):
             return
         if getattr(request.state, "current_user", None) == INTERNAL_TOOL_USER:
             return
