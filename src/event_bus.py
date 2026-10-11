@@ -30,6 +30,13 @@ def get_task_scheduler():
     return _task_scheduler
 
 
+# Strong refs to fire-and-forget event tasks. asyncio keeps only a weak
+# reference to tasks created with ``create_task``, so without this the GC can
+# collect the handler before it finishes and the event silently never runs
+# (issue #6288). Same pattern as routes/chat_helpers.py and src/builtin_mcp.py.
+_BG_TASKS: set = set()
+
+
 def fire_event(event_name: str, owner: Optional[str] = None):
     """Fire an event — increments counters and triggers tasks that hit threshold.
 
@@ -37,7 +44,9 @@ def fire_event(event_name: str, owner: Optional[str] = None):
     """
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_handle_event(event_name, owner))
+        task = loop.create_task(_handle_event(event_name, owner))
+        _BG_TASKS.add(task)
+        task.add_done_callback(_BG_TASKS.discard)
     except RuntimeError:
         # No running loop — run in a new one (shouldn't happen in FastAPI)
         asyncio.run(_handle_event(event_name, owner))
