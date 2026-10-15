@@ -377,7 +377,7 @@ def _cached_model_scan_script(model_dirs: list[str] | None = None, add_hf_cache:
     Allows for an additional HuggingFace cache path to be scanned (i.e. Windows HF cache for local WSL envs.)
     """
     lines = [
-                "import json, os, re, shutil, subprocess, sys, urllib.request",
+        "import json, os, re, shutil, subprocess, sys, urllib.request",
         "models = []",
         "seen = set()",
         "BLOCKED_ROOTS = ('/sys', '/proc', '/dev', '/run', '/var/run')",
@@ -488,7 +488,7 @@ def _cached_model_scan_script(model_dirs: list[str] | None = None, add_hf_cache:
         "    add(os.environ.get('HUGGINGFACE_HUB_CACHE'))",
         "    hf_home = os.environ.get('HF_HOME')",
         "    if hf_home: add(os.path.join(hf_home, 'hub'))",
-                "    # Best-effort: ask huggingface_hub for its own resolved cache.",
+        "    # Best-effort: ask huggingface_hub for its own resolved cache.",
         "    # Its defaults are platform-aware - macOS uses ~/Library/Caches/huggingface",
         "    # (NOT ~/.cache/...), which is what issue #5978 reported as missing. Falls",
         "    # back silently so the scanner still runs on remote hosts without the lib.",

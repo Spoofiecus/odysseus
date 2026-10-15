@@ -1022,7 +1022,7 @@ def test_validate_serve_cmd_rejects_unrelated_subshell_pipelines():
         (
             "llama-server --model model.gguf "
             "--mmproj \"$(find '/app/models' -iname '*.gguf' 2>/dev/null | sort | head -1)\""
-                ),
+        ),
     ]:
         with pytest.raises(HTTPException):
             _validate_serve_cmd(cmd)
