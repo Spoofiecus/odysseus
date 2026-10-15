@@ -72,6 +72,8 @@ def test_largest_respects_limit_and_orders_descending(tmp_path):
     )
 
     assert [row["id"] for row in report["chat_messages"]["largest"]] == ["m5", "m4"]
+
+
 def test_referenced_upload_is_excluded_from_suspected_orphans(tmp_path):
     db = tmp_path / "app.db"
     referenced = "a" * 32 + ".png"
@@ -123,6 +125,8 @@ def test_injected_reference_ids_skip_the_scan_and_report_complete(tmp_path):
 
     assert report["suspected_orphans"]["count"] == 0
     assert report["suspected_orphans"]["reference_scan_complete"] is True
+
+
 def test_missing_reference_tables_mark_the_scan_incomplete(tmp_path):
     """A partial scan must be surfaced, never presented as authoritative."""
     db = tmp_path / "app.db"

@@ -233,6 +233,8 @@ def _suspected_orphans(
         if len(orphans) < sample:
             orphans.append(name)
     return {"count": count, "bytes": total, "sample_ids": orphans}
+
+
 def collect_storage_report(
     *,
     db_path: Optional[str] = None,
