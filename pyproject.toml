@@ -1,6 +1,10 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Pin the fixture loop scope explicitly: pytest-asyncio warns on every run when
+# it is unset, because the implicit default ("function") is scheduled to change.
+# Behaviour is unchanged today; only the deprecation warning goes away.
+asyncio_default_fixture_loop_scope = "function"
 # Test-taxonomy markers added at collection time by tests/conftest.py. The
 # stable area_* markers are declared here; the dynamic sub_<filename-token>
 # markers are registered before collection by pytest_configure in
