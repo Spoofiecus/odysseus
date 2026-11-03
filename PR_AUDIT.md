@@ -50,15 +50,22 @@ test was a cosmetic guard over the real defect.
 
 ## 3. Root-cause fix (implemented, tested, pushed)
 
-Branch **`fix/chat-upload-single-error-6235`** (commit `5a25a9d6`, also on
-`cline/q0nne79z`) — one owner per concern:
+Branch **`fix/chat-upload-single-error-6235`** (commits `5a25a9d6`, `f939ee6a`;
+mirrored on `cline/q0nne79z`) — one owner per concern:
 
 | Layer | Change |
 |-------|--------|
 | Ownership | `fileHandler.uploadPending()` now **records** the reason (`getLastUploadError()`) and announces nothing; the user-facing message is rendered once, in `chat.js` |
 | Policy | new dependency-free `static/js/uploadFeedback.js`: `extractUploadErrorReason()` (string / `{error,message}` / `[{msg}]` / status fallback) and `formatUploadFailure()` (reason + "Attachment kept so you can retry.") |
 | Server | `chat_upload_limit_message()` single-sourced in `src/upload_limits.py`, used by **both** enforcement points (`UploadHandler` on `/api/upload`, `validate_file_upload` on the chat send path), and names `ODYSSEUS_CHAT_UPLOAD_MAX_BYTES` so the "10 MB is configurable" gap is closed where the limit is actually known |
-| Cache-bust | `fileHandler.js?v=` bumped in `chat.js`, `chatRenderer.js`, `gallery.js`, `app.js`, `sw.js`, `index.html` — otherwise the fix never reaches browsers holding the cached module |
+| Cache-bust | `fileHandler.js?v=` bumped in `chat.js`, `chatRenderer.js`, `gallery.js`, `app.js`, `sw.js`, `index.html`, and `chat.js?v=` bumped in `index.html` (script + modulepreload), `app.js`, `sw.js` — otherwise the fix never reaches browsers holding the cached module |
+
+Delivering the change to the browser needed the PWA list too: `static/sw.js`
+precaches an explicit asset list, so `uploadFeedback.js` was added to it and
+`CACHE_NAME` bumped (`odysseus-v1136-pr40-editor-precache`; the suffix is pinned
+by existing tests). A new coherence test asserts that all six places loading
+`fileHandler.js` agree on one URL and that the policy module is precached — the
+failure mode it catches is silent: two module instances, unit tests still green.
 
 Preserved behaviours (asserted): cancel still emits its single "Upload
 cancelled" toast and suppresses the composer message; pending files survive a
@@ -84,6 +91,29 @@ stubbed — the assertions are about what the module does.
 
 Result: `58 passed` across the upload-related files; `216 passed, 1 skipped`
 across the whole `tests/test_upload_*` + attachments surface.
+
+Both behavioural tests were **mutation-checked** rather than trusted:
+
+* re-adding `_showToast('Upload failed: ' + reason)` to the failure path makes
+  the oversize test fail with `{'toasts': 1} != {'toasts': 0}`;
+* pointing one loader at a different `?v=` makes the coherence test fail with
+  the conflicting URLs listed.
+
+## 3a. PRs cannot be opened/edited from this sandbox
+
+GitHub credentials here are read-only for `odysseus-dev/odysseus`
+(`GraphQL: Resource not accessible by integration` on both `gh pr edit 6293`
+and `gh pr create`). The branches are pushed to the fork and ready; run these
+as the author:
+
+```bash
+gh pr edit 6293 --repo odysseus-dev/odysseus --body-file _pr_audit/pr6293_body.md
+
+gh pr create --repo odysseus-dev/odysseus --base dev \
+  --head Spoofiecus:fix/chat-upload-single-error-6235 \
+  --title 'fix(chat): one error message per failed upload, carrying the server reason (#6235)' \
+  --body-file _pr_audit/pr_new_body.md
+```
 
 ## 4. PR #6293 — the reviewed one, corrected
 
@@ -162,6 +192,20 @@ To reproduce the container path on a Docker host:
 `cp .env.example .env && docker compose up -d --build`, attach a file larger
 than 10 MB in chat, and confirm exactly one message:
 `Upload failed: File size exceeds 10 MB limit (configurable via ODYSSEUS_CHAT_UPLOAD_MAX_BYTES). Attachment kept so you can retry.`
+
+### Pre-existing failures in this environment (baseline-verified)
+
+A batch of 1,347 static/front-end tests (`grep -l 'index.html|sw.js|app.js'`)
+gives **1,338 passed, 18 skipped, 9 failed**. The same 9 tests fail on a pristine
+`upstream/dev` worktree with the same interpreter, so none of them come from this
+change:
+
+* `tests/test_document_module_api.py` (3), `tests/test_email_library_module_graph_js.py` (2),
+  `tests/test_frontend_foundation_offline_js.py` (1) — all import `playwright`,
+  which is not installed here (`ERR_MODULE_NOT_FOUND: Cannot find package 'playwright'`);
+  CI installs it (`uv pip install playwright==1.62.0`).
+* `tests/test_workspace_artifact_tool_floor.py` (3) — expects the sandboxed
+  child-runner harness that this container does not provide.
 
 ## 7. Warning hygiene
 
